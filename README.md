@@ -14,10 +14,10 @@ Bot para Discord com RAG (Retrieval-Augmented Generation) usando documentos jur�
 
 ## Visão Geral
 
-O projeto combina três partes principais:
+O projeto combina tres partes principais:
 
 - Bot Discord (`!rag`, `!reindex` e resposta por menção)
-- API FastAPI para saúde, logs e reindexação protegida por token
+- API FastAPI para saude, logs e reindexacao
 - Pipeline de ingestão que baixa documentos, sanitiza arquivos, cria embeddings e publica artefatos de índice
 
 ## Funcionalidades
@@ -84,7 +84,7 @@ python main.py
 |---|---|---|---|
 | `DISCORD_TOKEN` | Sim | - | Token do bot Discord |
 | `BOT_PREFIX` | Não | `!` | Prefixo de comandos |
-| `REINDEX_API_TOKEN` | Sim | - | Token Bearer para `POST /reindex` |
+| `REINDEX_API_TOKEN` | Nao | - | Se definido, exige Bearer token no `POST /reindex`; se ausente, aceita apenas localhost |
 | `HF_TOKEN` | Sim | - | Token para Hugging Face Hub/Inference |
 | `HF_TEXT_MODEL` | Não | `microsoft/Phi-3.5-mini-instruct` | Modelo de geração de texto |
 | `HF_INFERENCE_URL` | Não | construído a partir de `HF_TEXT_MODEL` | URL da Inference API |
@@ -112,7 +112,8 @@ python main.py
 - `GET /health` -> `ok`
 - `GET /logs` -> últimos logs da ingestão
 - `POST /reindex` -> dispara ingestão
-  - Header obrigatório: `Authorization: Bearer <REINDEX_API_TOKEN>`
+  - Se `REINDEX_API_TOKEN` estiver definido: requer `Authorization: Bearer <REINDEX_API_TOKEN>`
+  - Se `REINDEX_API_TOKEN` nao estiver definido: apenas chamadas de `127.0.0.1`/`::1` sao aceitas
 
 ## Docker
 
@@ -120,6 +121,17 @@ Build e run local:
 
 ```bash
 docker build -t botspace .
+docker run --rm -p 7860:7860 \
+  -e DISCORD_TOKEN="$DISCORD_TOKEN" \
+  -e HF_TOKEN="$HF_TOKEN" \
+  -e DOCS_REPO_ID="$DOCS_REPO_ID" \
+  -e INDEX_REPO_ID="$INDEX_REPO_ID" \
+  botspace
+```
+
+Com protecao por token (opcional):
+
+```bash
 docker run --rm -p 7860:7860 \
   -e DISCORD_TOKEN="$DISCORD_TOKEN" \
   -e REINDEX_API_TOKEN="$REINDEX_API_TOKEN" \
