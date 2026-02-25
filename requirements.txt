@@ -1,8 +1,13 @@
+discord.py==2.4.0
+requests==2.32.3
+
 huggingface_hub>=0.24.0
 sentence-transformers>=3.0.0
 faiss-cpu>=1.8.0.post1
 numpy>=1.26
 pypdf>=4.2.0
 python-docx>=1.1.2
-striprtf>=0.0.26
 tqdm>=4.66
+
+fastapi==0.115.6
+uvicorn==0.30.6

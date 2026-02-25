@@ -13,7 +13,6 @@ from huggingface_hub import HfApi, snapshot_download
 from huggingface_hub._commit_api import CommitOperationAdd
 from pypdf import PdfReader
 from sentence_transformers import SentenceTransformer
-from striprtf.striprtf import rtf_to_text
 from tqdm import tqdm
 import docx
 
@@ -28,7 +27,7 @@ CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "200"))
 ARTIFACTS_PREFIX = os.getenv("ARTIFACTS_PREFIX", "artifacts")
 WORK_DIR = Path(os.getenv("WORK_DIR", "/tmp/rag_job"))
 
-ALLOWED_EXTS = {".pdf", ".docx", ".rtf"}
+ALLOWED_EXTS = {".pdf", ".docx"}
 
 
 def utc_iso() -> str:
@@ -90,11 +89,6 @@ def parse_docx(path: Path) -> str:
     return "\n".join(p.text for p in document.paragraphs if p.text and p.text.strip())
 
 
-def parse_rtf(path: Path) -> str:
-    raw = path.read_text(encoding="utf-8", errors="ignore")
-    return rtf_to_text(raw)
-
-
 def parse_file(path: Path) -> Tuple[str, str]:
     ext = path.suffix.lower()
     try:
@@ -102,8 +96,6 @@ def parse_file(path: Path) -> Tuple[str, str]:
             text = parse_pdf(path)
         elif ext == ".docx":
             text = parse_docx(path)
-        elif ext == ".rtf":
-            text = parse_rtf(path)
         else:
             return "", f"unsupported_extension:{ext}"
 
@@ -200,7 +192,10 @@ def main() -> None:
     print(f"[JOB] Sanitizing docs at {base}")
     sanitize_docs_inplace(base, report_path)
 
-    files = [p for p in base.rglob("*") if p.is_file() and p.suffix.lower() in ALLOWED_EXTS]
+    files = sorted(
+        [p for p in base.rglob("*") if p.is_file() and p.suffix.lower() in ALLOWED_EXTS],
+        key=lambda p: str(p).lower(),
+    )
     print(f"[JOB] Files found after sanitize: {len(files)}")
 
     docs_ok: List[Dict[str, str]] = []
@@ -234,8 +229,9 @@ def main() -> None:
     model = SentenceTransformer(EMBED_MODEL)
     vectors = model.encode(
         [chunk["text"] for chunk in chunks],
+        batch_size=64,
         normalize_embeddings=True,
-        show_progress_bar=True,
+        show_progress_bar=False,
     )
     vectors = np.asarray(vectors, dtype="float32")
 
