@@ -18,7 +18,7 @@ Space Docker all-in-one para bot Discord + RAG + reindex local.
 - `GET /logs`
 - `POST /reindex` (Bearer token)
 
-## Variáveis esperadas
+## Variaveis esperadas
 
 - `DOCS_REPO_ID`
 - `INDEX_REPO_ID`
