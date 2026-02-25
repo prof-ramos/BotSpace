@@ -13,6 +13,8 @@ HF_INFERENCE_URL = os.getenv(
 if not HF_TOKEN:
     raise RuntimeError("HF_TOKEN nao definido.")
 
+_SESSION = requests.Session()
+
 
 def _messages_to_prompt(messages: List[Dict[str, str]]) -> str:
     lines: List[str] = []
@@ -40,7 +42,7 @@ def call_hf(messages: List[Dict[str, str]], max_tokens: int = 500, temperature: 
         },
     }
 
-    response = requests.post(HF_INFERENCE_URL, headers=headers, json=payload, timeout=120)
+    response = _SESSION.post(HF_INFERENCE_URL, headers=headers, json=payload, timeout=120)
     response.raise_for_status()
     data = response.json()
 

@@ -88,13 +88,15 @@ python main.py
 | `HF_TOKEN` | Sim | - | Token para Hugging Face Hub/Inference |
 | `HF_TEXT_MODEL` | Não | `microsoft/Phi-3.5-mini-instruct` | Modelo de geração de texto |
 | `HF_INFERENCE_URL` | Não | construído a partir de `HF_TEXT_MODEL` | URL da Inference API |
+| `HF_HOME` | Não | autoajustado para diretório gravável (`/tmp/.huggingface` no Docker) | Diretório raiz de cache do Hugging Face |
+| `HF_HUB_CACHE` | Não | `<HF_HOME>/hub` | Diretório de cache do hub/modelos |
 | `DOCS_REPO_ID` | Sim (ingestão) | - | Dataset fonte de documentos |
 | `INDEX_REPO_ID` | Sim (ingestão) | - | Dataset destino dos artefatos de índice |
 | `DOCS_SUBDIR` | Não | `docs_rag` | Subdiretório dos documentos no dataset |
 | `EMBED_MODEL` | Não | `sentence-transformers/all-MiniLM-L6-v2` | Modelo de embeddings |
 | `CHUNK_CHARS` | Não | `1200` | Tamanho de chunk |
 | `CHUNK_OVERLAP` | Não | `200` | Sobreposição de chunks |
-| `WORK_DIR` | Não | `/data/work` (app) / `/tmp/rag_job` (ingest) | Diretório de trabalho |
+| `WORK_DIR` | Não | `/tmp/work` (app) / `/tmp/rag_job` (ingest) | Diretório de trabalho |
 | `ARTIFACTS_PREFIX` | Não | `artifacts` | Prefixo de arquivos no dataset de índice |
 | `RELOAD_POLL_SECONDS` | Não | `30` | Intervalo para detectar atualização do índice |
 | `REINDEX_EVERY_SECONDS` | Não | `0` | Agendamento automático de reindex (0 desativa) |
@@ -141,6 +143,8 @@ docker run --rm -p 7860:7860 \
   botspace
 ```
 
+> Em ambientes sem volume gravável em `/data`, o container usa `/tmp` por padrão e o runtime tenta fallback automático para um diretório de cache gravável da Hugging Face.
+
 ## Estrutura do Projeto
 
 ```text
@@ -156,12 +160,46 @@ docker run --rm -p 7860:7860 \
 └── docs_rag/               # Base documental local (quando aplicável)
 ```
 
+
+## Auditoria de Desempenho (resumo)
+
+### 1) Gargalos identificados
+
+- **Chamada de inferência sem reutilização de conexão HTTP**: cada request para a API da Hugging Face recriava conexão TCP/TLS.
+- **Re-embedding de consultas repetidas**: perguntas iguais no bot eram recodificadas a cada busca no FAISS.
+- **Janela de reload com potencial de contenção**: a checagem de `maybe_reload` ocorria sem proteger atualização de estado com lock.
+
+### 2) Utilização de recursos
+
+- **CPU**: carga principal em `SentenceTransformer.encode` (query-time e ingestão).
+- **Memória**: `meta.json` é carregado integralmente em RAM no runtime; cresce linearmente com número de chunks.
+- **Rede**: chamadas frequentes para inferência externa podem acumular latência por handshake quando sem sessão persistente.
+
+### 3) Eficiência algorítmica
+
+- A busca vetorial está em `IndexFlatIP` (custo linear por consulta: `O(N*d)`). Escala bem para volume moderado, mas pode degradar com muitos chunks.
+- Chunking é linear no tamanho dos documentos e adequado para ingestão batch.
+
+### 4) Estratégias de cache
+
+- Adotado cache em memória para vetores de query (até 256 entradas) com invalidação automática ao recarregar índice.
+- Adotada sessão HTTP global (`requests.Session`) para reuso de conexão na inferência.
+
+### Recomendações específicas de otimização
+
+1. **Migrar FAISS para índice aproximado** (`IndexIVFFlat`/`HNSW`) quando `num_chunks` crescer (ex.: > 200k) para reduzir latência de busca.
+2. **Persistir cache de query com TTL/LRU real** (ex.: `cachetools.TTLCache`) para manter hit-rate com limites previsíveis.
+3. **Compactar e segmentar metadados** (ex.: `orjson` + shards) para reduzir pico de RAM no `load()`.
+4. **Paralelizar parsing de documentos** na ingestão (pool por arquivo) para diminuir tempo total de reindexação.
+5. **Instrumentar métricas** (P95 de `search`, tempo de `call_hf`, uso de memória do processo) e definir alertas.
+
 ## Troubleshooting
 
 - Erro `HF_TOKEN nao definido`: exporte `HF_TOKEN` antes de iniciar.
 - Erro `DISCORD_TOKEN nao definido`: verifique token do bot e permissões no servidor.
 - `Indice nao existe ... Rode reindex primeiro.`: execute `!reindex` ou `POST /reindex`.
 - Falha com `.doc`: garanta LibreOffice/`soffice` disponível (já incluso no Dockerfile).
+- Erro de permissão em cache HF (`PermissionError: /data`): defina `HF_HOME`/`HF_HUB_CACHE` para um diretório gravável (ex.: `/tmp/.huggingface`) ou deixe o fallback automático configurar.
 
 ## Contribuição
 
