@@ -5,7 +5,7 @@ import time
 from pathlib import Path
 
 import uvicorn
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import PlainTextResponse
 
 from bot_app import run_bot
@@ -83,17 +83,22 @@ def logs():
 
 
 @app.post("/reindex", response_class=PlainTextResponse)
-def reindex(authorization: str | None = Header(default=None)):
-    if not REINDEX_API_TOKEN:
-        raise HTTPException(status_code=500, detail="REINDEX_API_TOKEN not configured")
+def reindex(request: Request, authorization: str | None = Header(default=None)):
+    if REINDEX_API_TOKEN:
+        if not authorization:
+            raise HTTPException(status_code=401, detail="Missing Authorization header")
 
-    if not authorization:
-        raise HTTPException(status_code=401, detail="Missing Authorization header")
+        expected = f"Bearer {REINDEX_API_TOKEN}"
+        if authorization != expected:
+            raise HTTPException(status_code=403, detail="Invalid token")
+        return run_ingest()
 
-    expected = f"Bearer {REINDEX_API_TOKEN}"
-    if authorization != expected:
-        raise HTTPException(status_code=403, detail="Invalid token")
-
+    client_host = request.client.host if request.client else ""
+    if client_host not in {"127.0.0.1", "::1", "localhost"}:
+        raise HTTPException(
+            status_code=403,
+            detail="External /reindex disabled when REINDEX_API_TOKEN is not set",
+        )
     return run_ingest()
 
 

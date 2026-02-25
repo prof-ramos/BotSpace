@@ -15,8 +15,6 @@ REINDEX_API_TOKEN = os.getenv("REINDEX_API_TOKEN")
 
 if not DISCORD_TOKEN:
     raise RuntimeError("DISCORD_TOKEN nao definido.")
-if not REINDEX_API_TOKEN:
-    raise RuntimeError("REINDEX_API_TOKEN nao definido.")
 
 index_rt = LocalIndexRuntime()
 
@@ -68,7 +66,9 @@ async def rag_cmd(ctx, *, question: str):
 async def reindex_cmd(ctx):
     await ctx.reply("Iniciando reindex... (pode demorar)")
     try:
-        headers = {"Authorization": f"Bearer {REINDEX_API_TOKEN}"}
+        headers = {}
+        if REINDEX_API_TOKEN:
+            headers["Authorization"] = f"Bearer {REINDEX_API_TOKEN}"
         r = await asyncio.to_thread(
             requests.post,
             "http://127.0.0.1:7860/reindex",
