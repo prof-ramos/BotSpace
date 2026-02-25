@@ -16,6 +16,8 @@ from sentence_transformers import SentenceTransformer
 from tqdm import tqdm
 import docx
 
+from hf_env import configure_hf_cache
+
 DOCS_REPO_ID = os.getenv("DOCS_REPO_ID")
 INDEX_REPO_ID = os.getenv("INDEX_REPO_ID")
 DOCS_SUBDIR = os.getenv("DOCS_SUBDIR", "docs_rag")
@@ -171,6 +173,9 @@ def main() -> None:
     out_dir = WORK_DIR / "out" / "artifacts"
     docs_dir.mkdir(parents=True, exist_ok=True)
     out_dir.mkdir(parents=True, exist_ok=True)
+
+    cache_dir = configure_hf_cache(WORK_DIR)
+    print(f"[JOB] HF cache dir: {cache_dir}")
 
     api = HfApi()
 

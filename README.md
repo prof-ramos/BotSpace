@@ -88,13 +88,15 @@ python main.py
 | `HF_TOKEN` | Sim | - | Token para Hugging Face Hub/Inference |
 | `HF_TEXT_MODEL` | Não | `microsoft/Phi-3.5-mini-instruct` | Modelo de geração de texto |
 | `HF_INFERENCE_URL` | Não | construído a partir de `HF_TEXT_MODEL` | URL da Inference API |
+| `HF_HOME` | Não | autoajustado para diretório gravável (`/tmp/.huggingface` no Docker) | Diretório raiz de cache do Hugging Face |
+| `HF_HUB_CACHE` | Não | `<HF_HOME>/hub` | Diretório de cache do hub/modelos |
 | `DOCS_REPO_ID` | Sim (ingestão) | - | Dataset fonte de documentos |
 | `INDEX_REPO_ID` | Sim (ingestão) | - | Dataset destino dos artefatos de índice |
 | `DOCS_SUBDIR` | Não | `docs_rag` | Subdiretório dos documentos no dataset |
 | `EMBED_MODEL` | Não | `sentence-transformers/all-MiniLM-L6-v2` | Modelo de embeddings |
 | `CHUNK_CHARS` | Não | `1200` | Tamanho de chunk |
 | `CHUNK_OVERLAP` | Não | `200` | Sobreposição de chunks |
-| `WORK_DIR` | Não | `/data/work` (app) / `/tmp/rag_job` (ingest) | Diretório de trabalho |
+| `WORK_DIR` | Não | `/tmp/work` (app) / `/tmp/rag_job` (ingest) | Diretório de trabalho |
 | `ARTIFACTS_PREFIX` | Não | `artifacts` | Prefixo de arquivos no dataset de índice |
 | `RELOAD_POLL_SECONDS` | Não | `30` | Intervalo para detectar atualização do índice |
 | `REINDEX_EVERY_SECONDS` | Não | `0` | Agendamento automático de reindex (0 desativa) |
@@ -128,6 +130,8 @@ docker run --rm -p 7860:7860 \
   -e INDEX_REPO_ID="$INDEX_REPO_ID" \
   botspace
 ```
+
+> Em ambientes sem volume gravável em `/data`, o container usa `/tmp` por padrão e o runtime tenta fallback automático para um diretório de cache gravável da Hugging Face.
 
 ## Estrutura do Projeto
 
@@ -183,6 +187,7 @@ docker run --rm -p 7860:7860 \
 - Erro `DISCORD_TOKEN nao definido`: verifique token do bot e permissões no servidor.
 - `Indice nao existe ... Rode reindex primeiro.`: execute `!reindex` ou `POST /reindex`.
 - Falha com `.doc`: garanta LibreOffice/`soffice` disponível (já incluso no Dockerfile).
+- Erro de permissão em cache HF (`PermissionError: /data`): defina `HF_HOME`/`HF_HUB_CACHE` para um diretório gravável (ex.: `/tmp/.huggingface`) ou deixe o fallback automático configurar.
 
 ## Contribuição
 

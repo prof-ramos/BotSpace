@@ -25,8 +25,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY --chown=user . .
 
 # Persistencia do Space
-ENV HF_HOME=/data/.huggingface
-ENV WORK_DIR=/data/work
-ENV LOCAL_STORAGE_DIR=/data/storage
+ENV HF_HOME=/tmp/.huggingface
+ENV WORK_DIR=/tmp/work
+ENV LOCAL_STORAGE_DIR=/tmp/storage
 
 CMD ["python", "main.py"]

@@ -9,21 +9,30 @@ import faiss
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
+from hf_env import configure_hf_cache
+
 EMBED_MODEL = os.getenv("EMBED_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
-WORK_DIR = Path(os.getenv("WORK_DIR", "/data/work"))
+WORK_DIR = Path(os.getenv("WORK_DIR", "/tmp/work"))
 ART_DIR = WORK_DIR / "out" / "artifacts"
 RELOAD_POLL_SECONDS = int(os.getenv("RELOAD_POLL_SECONDS", "30"))
 
 
 class LocalIndexRuntime:
     def __init__(self) -> None:
-        self.model = SentenceTransformer(EMBED_MODEL)
+        self.model: SentenceTransformer | None = None
         self.index: faiss.Index | None = None
         self.meta: List[Dict[str, Any]] | None = None
         self.last_mtime: float | None = None
         self.last_check = 0.0
         self._lock = threading.RLock()
         self._query_cache: Dict[str, np.ndarray] = {}
+
+    def _ensure_model(self) -> None:
+        if self.model is not None:
+            return
+        cache_dir = configure_hf_cache(WORK_DIR)
+        print(f"[INDEX] HF cache dir: {cache_dir}")
+        self.model = SentenceTransformer(EMBED_MODEL)
 
     def _paths(self) -> tuple[Path, Path]:
         return (ART_DIR / "faiss.index", ART_DIR / "meta.json")
@@ -74,6 +83,8 @@ class LocalIndexRuntime:
 
             qv = self._query_cache.get(query)
             if qv is None:
+                self._ensure_model()
+                assert self.model is not None
                 encoded = self.model.encode([query], normalize_embeddings=True)
                 qv = np.asarray(encoded, dtype="float32")
                 if len(self._query_cache) >= 256:
