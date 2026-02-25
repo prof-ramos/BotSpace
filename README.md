@@ -144,6 +144,39 @@ docker run --rm -p 7860:7860 \
 └── docs_rag/               # Base documental local (quando aplicável)
 ```
 
+
+## Auditoria de Desempenho (resumo)
+
+### 1) Gargalos identificados
+
+- **Chamada de inferência sem reutilização de conexão HTTP**: cada request para a API da Hugging Face recriava conexão TCP/TLS.
+- **Re-embedding de consultas repetidas**: perguntas iguais no bot eram recodificadas a cada busca no FAISS.
+- **Janela de reload com potencial de contenção**: a checagem de `maybe_reload` ocorria sem proteger atualização de estado com lock.
+
+### 2) Utilização de recursos
+
+- **CPU**: carga principal em `SentenceTransformer.encode` (query-time e ingestão).
+- **Memória**: `meta.json` é carregado integralmente em RAM no runtime; cresce linearmente com número de chunks.
+- **Rede**: chamadas frequentes para inferência externa podem acumular latência por handshake quando sem sessão persistente.
+
+### 3) Eficiência algorítmica
+
+- A busca vetorial está em `IndexFlatIP` (custo linear por consulta: `O(N*d)`). Escala bem para volume moderado, mas pode degradar com muitos chunks.
+- Chunking é linear no tamanho dos documentos e adequado para ingestão batch.
+
+### 4) Estratégias de cache
+
+- Adotado cache em memória para vetores de query (até 256 entradas) com invalidação automática ao recarregar índice.
+- Adotada sessão HTTP global (`requests.Session`) para reuso de conexão na inferência.
+
+### Recomendações específicas de otimização
+
+1. **Migrar FAISS para índice aproximado** (`IndexIVFFlat`/`HNSW`) quando `num_chunks` crescer (ex.: > 200k) para reduzir latência de busca.
+2. **Persistir cache de query com TTL/LRU real** (ex.: `cachetools.TTLCache`) para manter hit-rate com limites previsíveis.
+3. **Compactar e segmentar metadados** (ex.: `orjson` + shards) para reduzir pico de RAM no `load()`.
+4. **Paralelizar parsing de documentos** na ingestão (pool por arquivo) para diminuir tempo total de reindexação.
+5. **Instrumentar métricas** (P95 de `search`, tempo de `call_hf`, uso de memória do processo) e definir alertas.
+
 ## Troubleshooting
 
 - Erro `HF_TOKEN nao definido`: exporte `HF_TOKEN` antes de iniciar.

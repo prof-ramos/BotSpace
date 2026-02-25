@@ -23,6 +23,7 @@ class LocalIndexRuntime:
         self.last_mtime: float | None = None
         self.last_check = 0.0
         self._lock = threading.RLock()
+        self._query_cache: Dict[str, np.ndarray] = {}
 
     def _paths(self) -> tuple[Path, Path]:
         return (ART_DIR / "faiss.index", ART_DIR / "meta.json")
@@ -38,6 +39,7 @@ class LocalIndexRuntime:
             self.meta = json.loads(meta.read_text(encoding="utf-8"))
             self.last_mtime = idx.stat().st_mtime
             self.last_check = time.time()
+            self._query_cache.clear()
             print(f"[INDEX] loaded local index from {idx}")
 
     def ensure_loaded(self) -> None:
@@ -49,9 +51,10 @@ class LocalIndexRuntime:
 
     def maybe_reload(self) -> None:
         now = time.time()
-        if now - self.last_check < RELOAD_POLL_SECONDS:
-            return
-        self.last_check = now
+        with self._lock:
+            if now - self.last_check < RELOAD_POLL_SECONDS:
+                return
+            self.last_check = now
 
         idx, _ = self._paths()
         if not idx.exists():
@@ -69,8 +72,13 @@ class LocalIndexRuntime:
             assert self.index is not None
             assert self.meta is not None
 
-            qv = self.model.encode([query], normalize_embeddings=True)
-            qv = np.asarray(qv, dtype="float32")
+            qv = self._query_cache.get(query)
+            if qv is None:
+                encoded = self.model.encode([query], normalize_embeddings=True)
+                qv = np.asarray(encoded, dtype="float32")
+                if len(self._query_cache) >= 256:
+                    self._query_cache.pop(next(iter(self._query_cache)))
+                self._query_cache[query] = qv
 
             scores, idxs = self.index.search(qv, k)
             out: List[Dict[str, Any]] = []
