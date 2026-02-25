@@ -1,3 +1,13 @@
+---
+title: BotSpace
+emoji: "🤖"
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # BotSpace
 
 Bot para Discord com RAG (Retrieval-Augmented Generation) usando documentos jurídicos, indexação local com FAISS e geração de respostas via Hugging Face Inference API.
